@@ -1,14 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
 	"strings"
-	"encoding/json"
-	"io/ioutil"
-	
+
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
@@ -40,7 +40,7 @@ func addItem(c echo.Context) error {
 	// Get form data
 	name := c.FormValue("name")
 	category := c.FormValue("category")
-	
+
 	c.Logger().Infof("Receive item: %s", name)
 	c.Logger().Infof("Receive item: %s", category)
 
@@ -56,29 +56,29 @@ func addItem(c echo.Context) error {
 	_ = ioutil.WriteFile("items.json", file, 0644)
 
 	message := fmt.Sprintf("item received: %s", name)
-	// message := fmt.Sprintf("item received!!: %s %s", name, category)
+	
 	res := Response{Message: message}
 
 	return c.JSON(http.StatusOK, res)
 }
 
-func getItem(c echo.Context) error  {
-    jsonFile, err := os.Open("items.json")
-    if err != nil {
-        fmt.Println("JSONファイルを開けません", err)
-        return c.JSON(http.StatusBadRequest, err)
-    }
-    defer jsonFile.Close()
-    jsonData, err := ioutil.ReadAll(jsonFile)
-    if err != nil {
-        fmt.Println("JSONデータを読み込めません", err)
-        return c.JSON(http.StatusBadRequest, err)
-    }
+func getItem(c echo.Context) error {
+	jsonFile, err := os.Open("items.json")
+	if err != nil {
+		fmt.Println("JSONファイルを開けません", err)
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+	defer jsonFile.Close()
+	jsonData, err := ioutil.ReadAll(jsonFile)
+	if err != nil {
+		fmt.Println("JSONデータを読み込めません", err)
+		return c.JSON(http.StatusInternalServerError, err)
+	}
 
-    var items Items
-    json.Unmarshal(jsonData, &items)
+	var items Items
+	json.Unmarshal(jsonData, &items)
 
-    return c.JSON(http.StatusOK, items)
+	return c.JSON(http.StatusOK, items)
 }
 
 func getImg(c echo.Context) error {
@@ -118,7 +118,6 @@ func main() {
 	e.POST("/items", addItem)
 	e.GET("/items", getItem)
 	e.GET("/image/:imageFilename", getImg)
-
 
 	// Start server
 	e.Logger.Fatal(e.Start(":9000"))
