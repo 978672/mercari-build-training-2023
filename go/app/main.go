@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	// "crypto/sha256"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -22,13 +23,14 @@ type Response struct {
 	Message string `json:"message"`
 }
 
-type Items struct{
+type Items struct {
 	Items []Item `json:"items"`
 }
 
 type Item struct {
-	Name string `json:"name"`
+	Name     string `json:"name"`
 	Category string `json:"category"`
+	Image string `json:"image_file"`
 }
 
 func root(c echo.Context) error {
@@ -40,23 +42,41 @@ func addItem(c echo.Context) error {
 	// Get form data
 	name := c.FormValue("name")
 	category := c.FormValue("category")
+	imageName := c.FormValue("image")
 
 	c.Logger().Infof("Receive item: %s", name)
 	c.Logger().Infof("Receive item: %s", category)
 
 	// item
 	var newItem Item
-	newItem.Name = name 
+	newItem.Name = name
 	newItem.Category = category
+	newItem.Image = imageName
+	
+	// fileを開いて読んでitemsをゲットする
+	jsonFile, err := os.Open("items.json")
+	if err != nil {
+		fmt.Println("JSONファイルを開けません", err)
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+	defer jsonFile.Close()
+	jsonData, err := ioutil.ReadAll(jsonFile)
+	if err != nil {
+		fmt.Println("JSONファイルを開けません", err)
+		return c.JSON(http.StatusInternalServerError, err)
+	}
 
 	var items Items
-	items.Items = append(items.Items, newItem)
+	
+	json.Unmarshal(jsonData, &items)
 
+
+	// fileに追加
+	items.Items = append(items.Items, newItem)
 	file, _ := json.MarshalIndent(items, "", " ")
 	_ = ioutil.WriteFile("items.json", file, 0644)
 
 	message := fmt.Sprintf("item received: %s", name)
-	
 	res := Response{Message: message}
 
 	return c.JSON(http.StatusOK, res)
@@ -71,14 +91,14 @@ func getItem(c echo.Context) error {
 	defer jsonFile.Close()
 	jsonData, err := ioutil.ReadAll(jsonFile)
 	if err != nil {
-		fmt.Println("JSONデータを読み込めません", err)
+		fmt.Println("JSONファイルを開けません", err)
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
 	var items Items
 	json.Unmarshal(jsonData, &items)
 
-	return c.JSON(http.StatusOK, items)
+	return c.JSON(http.StatusOK, items) 
 }
 
 func getImg(c echo.Context) error {
