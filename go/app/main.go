@@ -8,7 +8,7 @@ import (
 	"os"
 	"path"
 	"strings"
-	// "crypto/sha256"
+	"crypto/sha256"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -30,7 +30,7 @@ type Items struct {
 type Item struct {
 	Name     string `json:"name"`
 	Category string `json:"category"`
-	Image string `json:"image_file"`
+	Image string `json:"image"`
 }
 
 func root(c echo.Context) error {
@@ -38,20 +38,29 @@ func root(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
+//ハッシュ化
+func getSHA256Binary(s string) []byte {
+    r := sha256.Sum256([]byte(s))
+    return r[:]
+}
+
 func addItem(c echo.Context) error {
 	// Get form data
 	name := c.FormValue("name")
 	category := c.FormValue("category")
 	imageName := c.FormValue("image")
+	
+	hashedImg := getSHA256Binary(imageName)
+	image_filename := fmt.Sprintf("%x%s",hashedImg , ".jpg")
 
 	c.Logger().Infof("Receive item: %s", name)
 	c.Logger().Infof("Receive item: %s", category)
 
-	// item
+	// 新しいitemを作る
 	var newItem Item
 	newItem.Name = name
 	newItem.Category = category
-	newItem.Image = imageName
+	newItem.Image = image_filename
 	
 	// fileを開いて読んでitemsをゲットする
 	jsonFile, err := os.Open("items.json")
