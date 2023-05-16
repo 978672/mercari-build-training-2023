@@ -10,10 +10,12 @@ import (
 	"strings"
 	"crypto/sha256"
 	"strconv"
+	"database/sql"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const (
@@ -29,6 +31,7 @@ type Items struct {
 }
 
 type Item struct {
+	Id string `json:"id"`
 	Name     string `json:"name"`
 	Category string `json:"category"`
 	Image string `json:"image"`
@@ -106,22 +109,35 @@ func addItem(c echo.Context) error {
 }
 
 func getItem(c echo.Context) error {
-	jsonFile, err := os.Open("items.json")
+	// データベースへのアクセス
+	db, err := sql.Open("sqlite3", "../../db/items.db")
 	if err != nil {
-		fmt.Println("JSONファイルを開けません", err)
-		return c.JSON(http.StatusInternalServerError, err)
+		log.Fatal(err)
 	}
-	defer jsonFile.Close()
-	jsonData, err := ioutil.ReadAll(jsonFile)
+	defer db.Close()
+
+	var (
+		id int
+		name string
+	)
+	rows, err := db.Query("select id, name from users where id = ?", 1)
 	if err != nil {
-		fmt.Println("JSONファイルを開けません", err)
-		return c.JSON(http.StatusInternalServerError, err)
+		log.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		err := rows.Scan(&id, &name)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(id, name)
+	}
+	err = rows.Err()
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	var items Items
-	json.Unmarshal(jsonData, &items)
-
-	return c.JSON(http.StatusOK, items) 
+	return c.JSON(http.StatusOK, name) 
 }
 
 func getImg(c echo.Context) error {
@@ -143,7 +159,8 @@ func getImg(c echo.Context) error {
 func getItemByID(c echo.Context)  error{
 	jsonFile, err := os.Open("items.json")
 	if err != nil {
-		fmt.Println("JSONファイルを開けません", err)
+		// fmt.printInの代わりにlog.printfに
+		log.Printf("JSONファイルを開けません", err)
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 	defer jsonFile.Close()
@@ -168,6 +185,8 @@ func getItemByID(c echo.Context)  error{
 	res := Response{Message: "Not found"}
 	return c.JSON(http.StatusNotFound, res)
 }
+
+
 
 
 func main() {
