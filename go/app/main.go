@@ -1,15 +1,15 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
-	"strings"
-	"crypto/sha256"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -31,7 +31,7 @@ type Items struct {
 type Item struct {
 	Name     string `json:"name"`
 	Category string `json:"category"`
-	Image string `json:"image"`
+	Image    string `json:"image"`
 }
 
 func root(c echo.Context) error {
@@ -39,18 +39,15 @@ func root(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-/* 3.4 
-curl -X POST 
---url http://localhost:9000/items 
--F name=jacket 
--F category=fashion 
--F image=@./local_image.jpg
+/* 3.4
+curl -X POST --url http://localhost:9000/items -F name=jacket -F category=fashion -F image=@./local_image.jpg
+imagesでcurlする
 */
 
 //ハッシュ化
 func getSHA256Binary(s string) []byte {
-    r := sha256.Sum256([]byte(s))
-    return r[:]
+	r := sha256.Sum256([]byte(s))
+	return r[:]
 }
 
 func addItem(c echo.Context) error {
@@ -64,7 +61,7 @@ func addItem(c echo.Context) error {
 
 	//hashしたものに".jpg"をつける
 	hashedImg := getSHA256Binary(image.Filename)
-	image_filename := fmt.Sprintf("%x%s",hashedImg , ".jpg")
+	image_filename := fmt.Sprintf("%x%s", hashedImg, ".jpg")
 
 	c.Logger().Infof("Receive item: %s", name)
 	c.Logger().Infof("Receive item: %s", category)
@@ -75,24 +72,23 @@ func addItem(c echo.Context) error {
 	newItem.Name = name
 	newItem.Category = category
 	newItem.Image = image_filename
-	
+
 	// fileを開いて読んでitemsをゲットする
 	jsonFile, err := os.Open("items.json")
 	if err != nil {
-		fmt.Println("JSONファイルを開けません", err)
+		c.Logger().Infof("JSONファイルを開けません", err)
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 	defer jsonFile.Close()
 	jsonData, err := ioutil.ReadAll(jsonFile)
 	if err != nil {
-		fmt.Println("JSONファイルを開けません", err)
+		c.Logger().Infof("JSONファイルを開けません", err)
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
 	var items Items
-	
-	json.Unmarshal(jsonData, &items)
 
+	json.Unmarshal(jsonData, &items)
 
 	// fileに追加
 	items.Items = append(items.Items, newItem)
@@ -108,20 +104,20 @@ func addItem(c echo.Context) error {
 func getItem(c echo.Context) error {
 	jsonFile, err := os.Open("items.json")
 	if err != nil {
-		fmt.Println("JSONファイルを開けません", err)
+		c.Logger().Infof("JSONファイルを開けません", err)
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 	defer jsonFile.Close()
 	jsonData, err := ioutil.ReadAll(jsonFile)
 	if err != nil {
-		fmt.Println("JSONファイルを開けません", err)
+		c.Logger().Infof("JSONファイルを開けません", err)
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
 	var items Items
 	json.Unmarshal(jsonData, &items)
 
-	return c.JSON(http.StatusOK, items) 
+	return c.JSON(http.StatusOK, items)
 }
 
 func getImg(c echo.Context) error {
@@ -139,36 +135,32 @@ func getImg(c echo.Context) error {
 	return c.File(imgPath)
 }
 
-
-func getItemByID(c echo.Context)  error{
+func getItemByID(c echo.Context) error {
 	jsonFile, err := os.Open("items.json")
 	if err != nil {
-		fmt.Println("JSONファイルを開けません", err)
+		c.Logger().Infof("JSONファイルを開けません", err)
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 	defer jsonFile.Close()
 	jsonData, err := ioutil.ReadAll(jsonFile)
 	if err != nil {
-		fmt.Println("JSONファイルを開けません", err)
+		c.Logger().Infof("JSONファイルを開けません", err)
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
 	var items Items
 	json.Unmarshal(jsonData, &items)
 
-	id := c.Param("item_id") 
-	
-	idItem := Item{}
+	id := c.Param("item_id")
+
 	for index, element := range items.Items {
-		if(strconv.Itoa(index) == id){
-			idItem = element
-			return c.JSON(http.StatusOK, idItem)
+		if strconv.Itoa(index) == id {
+			return c.JSON(http.StatusOK, element)
 		}
 	}
 	res := Response{Message: "Not found"}
 	return c.JSON(http.StatusNotFound, res)
 }
-
 
 func main() {
 	e := echo.New()
