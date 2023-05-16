@@ -18,6 +18,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+var DbConnection *sql.DB
+
 const (
 	ImgDir = "images"
 )
@@ -79,28 +81,33 @@ func addItem(c echo.Context) error {
 	newItem.Category = category
 	newItem.Image = image_filename
 	
-	// fileを開いて読んでitemsをゲットする
-	jsonFile, err := os.Open("items.json")
-	if err != nil {
-		fmt.Println("JSONファイルを開けません", err)
-		return c.JSON(http.StatusInternalServerError, err)
-	}
-	defer jsonFile.Close()
-	jsonData, err := ioutil.ReadAll(jsonFile)
-	if err != nil {
-		fmt.Println("JSONファイルを開けません", err)
-		return c.JSON(http.StatusInternalServerError, err)
-	}
+	// データベースを開く。なければ生成
+	DbConnection, _ := sql.Open("sqlite3", "../../db/items.db")
+	//閉じる
+	defer DbConnection.Close()
 
-	var items Items
+	cmd := `CREATE TABLE IF NOT EXISTS items(
+        id int primary key autoincrement, 
+		name string, 
+		category string, 
+		image_name string)`
+
+	//実行 結果は返ってこない為、_にする
+    _, err = DbConnection.Exec(cmd)
+
+    //エラーハンドリング
+    if err != nil {
+        c.Logger().Infof("エラー", err)
+    }
 	
-	json.Unmarshal(jsonData, &items)
 
-
-	// fileに追加
-	items.Items = append(items.Items, newItem)
-	file, _ := json.MarshalIndent(items, "", " ")
-	_ = ioutil.WriteFile("items.json", file, 0644)
+	// 追加
+	// VALUES (?, ?)  値は後で渡す。セキュリテイの関係でこのようにする方がいいらしい
+    cmd = "INSERT INTO items (name, category, image_name) VALUES (?, ?, ?, ?)"
+	_, err = DbConnection.Exec(cmd, newItem.Name, newItem.Category, newItem.Image)
+    if err != nil {
+        c.Logger().Infof("エラー", err)
+    }
 
 	message := fmt.Sprintf("item received: %s", name)
 	res := Response{Message: message}
@@ -109,35 +116,53 @@ func addItem(c echo.Context) error {
 }
 
 func getItem(c echo.Context) error {
-	// データベースへのアクセス
-	db, err := sql.Open("sqlite3", "../../db/items.db")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
 
-	var (
-		id int
-		name string
-	)
-	rows, err := db.Query("select id, name from users where id = ?", 1)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		err := rows.Scan(&id, &name)
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println(id, name)
-	}
-	err = rows.Err()
-	if err != nil {
-		log.Fatal(err)
-	}
+	// データベースを開く。なければ生成
+	DbConnection, _ := sql.Open("sqlite3", "../../db/items.db")
+	//閉じる
+	defer DbConnection.Close()
 
-	return c.JSON(http.StatusOK, name) 
+	cmd := `CREATE TABLE IF NOT EXISTS items(
+        id int primary key autoincrement, 
+		name string, 
+		category string, 
+		image_name string)`
+
+	//実行 結果は返ってこない為、_にする
+    _, err := DbConnection.Exec(cmd)
+
+    //エラーハンドリング
+    if err != nil {
+        c.Logger().Infof("エラー", err)
+    }
+	
+	//Read
+	cmd = "SELECT * FROM person"
+    rows, _ := DbConnection.Query(cmd)
+    defer rows.Close()
+	
+	// 取得したデータをループでスライスに追加　for rows.Next()
+    var item []Item
+    for rows.Next() {
+        var element Item
+        //scan データ追加
+        err := rows.Scan(&element.Id, &element.Name, &element.Category, &element.Image)
+        if err != nil {
+            c.Logger().Infof("sqlの中身にエラー", err)
+        }
+        item = append(item, element)
+    }
+
+    err = rows.Err()
+    if err != nil {
+        c.Logger().Infof("エラー", err)
+    }
+
+    //表示
+    for _, element := range item {
+        fmt.Println(element.Name, element.Category)
+    }
+	return c.JSON(http.StatusOK, item) 
 }
 
 func getImg(c echo.Context) error {
@@ -159,14 +184,13 @@ func getImg(c echo.Context) error {
 func getItemByID(c echo.Context)  error{
 	jsonFile, err := os.Open("items.json")
 	if err != nil {
-		// fmt.printInの代わりにlog.printfに
-		log.Printf("JSONファイルを開けません", err)
+		c.Logger().Infof("JSONファイルを開けません", err)
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 	defer jsonFile.Close()
 	jsonData, err := ioutil.ReadAll(jsonFile)
 	if err != nil {
-		fmt.Println("JSONファイルを開けません", err)
+		c.Logger().Infof("JSONファイルを開けません", err)
 		return c.JSON(http.StatusInternalServerError, err)
 	}
 
