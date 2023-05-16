@@ -80,7 +80,7 @@ func addItem(c echo.Context) error {
 	newItem.Image = image_filename
 	
 	// データベースを開く。なければ生成
-	DbConnection, _ := sql.Open("sqlite3", "../../db/items.db")
+	DbConnection, _ := sql.Open("sqlite3", "../../db/mercari.sqlite3")
 	//閉じる
 	defer DbConnection.Close()
 
@@ -116,7 +116,7 @@ func addItem(c echo.Context) error {
 func getItem(c echo.Context) error {
 
 	// データベースを開く。なければ生成
-	DbConnection, _ := sql.Open("sqlite3", "../../db/items.db")
+	DbConnection, _ := sql.Open("sqlite3", "../../db/mercari.sqlite3")
 	//閉じる
 	defer DbConnection.Close()
 
@@ -178,10 +178,9 @@ func getImg(c echo.Context) error {
 	return c.File(imgPath)
 }
 
-
 func getItemByID(c echo.Context)  error{
 	// データベースを開く。なければ生成
-	DbConnection, _ := sql.Open("sqlite3", "../../db/items.db")
+	DbConnection, _ := sql.Open("sqlite3", "../../db/mercari.sqlite3")
 	//閉じる
 	defer DbConnection.Close()
 
@@ -221,9 +220,7 @@ func getItemByID(c echo.Context)  error{
         c.Logger().Infof("エラー", err)
     }
 
-
 	id := c.Param("item_id") 
-	
 	for i, ele := range item {
 		if(strconv.Itoa(i) == id){
 			return c.JSON(http.StatusOK, ele)
@@ -233,7 +230,56 @@ func getItemByID(c echo.Context)  error{
 	return c.JSON(http.StatusNotFound, res)
 }
 
+func searchItems(c echo.Context)  error{
+	// データベースを開く。なければ生成
+	DbConnection, _ := sql.Open("sqlite3", "../../db/mercari.sqlite3")
+	defer DbConnection.Close()
+	cmd := `CREATE TABLE IF NOT EXISTS items(
+        id int primary key autoincrement, 
+		name string, 
+		category string, 
+		image_name string)`
+    _, err := DbConnection.Exec(cmd)
 
+    if err != nil {
+        c.Logger().Infof("エラー", err)
+    }
+	
+	//Read
+	cmd = "SELECT * FROM person"
+    rows, _ := DbConnection.Query(cmd)
+    defer rows.Close()
+	
+	// 取得したデータをループでスライスに追加　for rows.Next()
+    var item []Item
+    for rows.Next() {
+        var element Item
+        //scan データ追加
+        err := rows.Scan(&element.Id, &element.Name, &element.Category, &element.Image)
+        if err != nil {
+            c.Logger().Infof("sqlの中身にエラー", err)
+        }
+        item = append(item, element)
+    }
+
+    err = rows.Err()
+    if err != nil {
+        c.Logger().Infof("エラー", err)
+    }
+
+	var keyword string = c.FormValue("keyword")
+	var searchedItem []Item
+	for _, ele := range item {
+		if(keyword == ele.Category){
+			searchedItem = append(searchedItem, ele)
+		}
+	}
+	if len(searchedItem) != 0 {
+		return c.JSON(http.StatusNotFound, searchedItem)
+	}
+	res := Response{Message: "Not found"}
+	return c.JSON(http.StatusNotFound, res)
+}
 
 
 func main() {
@@ -259,7 +305,7 @@ func main() {
 	e.GET("/items", getItem)
 	e.GET("/image/:imageFilename", getImg)
 	e.GET("/items/:item_id", getItemByID)
-
+	e.GET("/items/search", searchItems)
 	// Start server
 	e.Logger.Fatal(e.Start(":9000"))
 }
