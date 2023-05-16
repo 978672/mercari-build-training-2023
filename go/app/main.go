@@ -1,9 +1,7 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -182,28 +180,53 @@ func getImg(c echo.Context) error {
 
 
 func getItemByID(c echo.Context)  error{
-	jsonFile, err := os.Open("items.json")
-	if err != nil {
-		c.Logger().Infof("JSONファイルを開けません", err)
-		return c.JSON(http.StatusInternalServerError, err)
-	}
-	defer jsonFile.Close()
-	jsonData, err := ioutil.ReadAll(jsonFile)
-	if err != nil {
-		c.Logger().Infof("JSONファイルを開けません", err)
-		return c.JSON(http.StatusInternalServerError, err)
-	}
+	// データベースを開く。なければ生成
+	DbConnection, _ := sql.Open("sqlite3", "../../db/items.db")
+	//閉じる
+	defer DbConnection.Close()
 
-	var items Items
-	json.Unmarshal(jsonData, &items)
+	cmd := `CREATE TABLE IF NOT EXISTS items(
+        id int primary key autoincrement, 
+		name string, 
+		category string, 
+		image_name string)`
+
+	//実行 結果は返ってこない為、_にする
+    _, err := DbConnection.Exec(cmd)
+
+    //エラーハンドリング
+    if err != nil {
+        c.Logger().Infof("エラー", err)
+    }
+	
+	//Read
+	cmd = "SELECT * FROM person"
+    rows, _ := DbConnection.Query(cmd)
+    defer rows.Close()
+	
+	// 取得したデータをループでスライスに追加　for rows.Next()
+    var item []Item
+    for rows.Next() {
+        var element Item
+        //scan データ追加
+        err := rows.Scan(&element.Id, &element.Name, &element.Category, &element.Image)
+        if err != nil {
+            c.Logger().Infof("sqlの中身にエラー", err)
+        }
+        item = append(item, element)
+    }
+
+    err = rows.Err()
+    if err != nil {
+        c.Logger().Infof("エラー", err)
+    }
+
 
 	id := c.Param("item_id") 
 	
-	idItem := Item{}
-	for index, element := range items.Items {
-		if(strconv.Itoa(index) == id){
-			idItem = element
-			return c.JSON(http.StatusOK, idItem)
+	for i, ele := range item {
+		if(strconv.Itoa(i) == id){
+			return c.JSON(http.StatusOK, ele)
 		}
 	}
 	res := Response{Message: "Not found"}
