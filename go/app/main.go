@@ -49,11 +49,7 @@ func root(c echo.Context) error {
 }
 
 /* 3.4
-curl -X POST
---url http://localhost:9000/items
--F name=jacket
--F category=fashion
--F image=@./local_image.jpg
+curl -X POST --url http://localhost:9000/items -F name=jacket -F category=fashion -F image=@./local_image.jpg
 */
 
 // ハッシュ化
@@ -61,6 +57,35 @@ func getSHA256Binary(s string) []byte {
 	r := sha256.Sum256([]byte(s))
 	return r[:]
 }
+
+//dbが存在しなかったときに作る
+func makeDB(){
+	// データベースを開く。なければ生成
+	DbConnection, err := sql.Open("sqlite3", "../db/mercari.sqlite3")
+	
+	cmd := `CREATE TABLE IF NOT EXISTS category (
+		id integer primary key autoincrement,
+		name string NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS items(
+        id integer primary key autoincrement, 
+		name string NOT NULL, 
+		category_id integer NOT NULL, 
+		image_name string,
+		FOREIGN KEY (category_id) REFERENCES Category(id)
+		);`
+
+	//実行 結果は返ってこない為、_にする
+	_, err = DbConnection.Exec(cmd)
+
+	//エラーハンドリング
+	if err != nil {
+		log.Fatal(err)
+	}
+	//閉じる
+	defer DbConnection.Close()
+}
+
 
 func addItem(c echo.Context) error {
 	// Get form data
@@ -85,29 +110,41 @@ func addItem(c echo.Context) error {
 	newItem.Category = category
 	newItem.Image = image_filename
 
-	// データベースを開く。なければ生成
-	DbConnection, _ := sql.Open("sqlite3", "../db/mercari.sqlite3")
-	//閉じる
-	defer DbConnection.Close()
+	// makeDB()
 
-	cmd := `CREATE TABLE IF NOT EXISTS items(
-        id int primary key autoincrement, 
-		name string, 
-		category string, 
-		image_name string)`
-
-	//実行 結果は返ってこない為、_にする
-	_, err = DbConnection.Exec(cmd)
-
-	//エラーハンドリング
+	DbConnection, err := sql.Open("sqlite3", "../db/mercari.sqlite3")
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
+	defer DbConnection.Close()
 
 	// 追加
+	var cmd string
+	
+	//categoryに追加
+	var categoryId int64
+	c.Logger().Infof(category)
+	err = DbConnection.QueryRow("SELECT id FROM category WHERE name = ?", category).Scan(&categoryId)
+	if err != nil {
+		c.Logger().Infof("カテゴリー無し")
+		
+		DbConnection, err := sql.Open("sqlite3", "../db/mercari.sqlite3")
+		
+		cmd := "INSERT INTO category (name) VALUES (?)"
+		add, err := DbConnection.Exec(cmd, category)
+
+		if err != nil {
+			c.Logger().Infof("エラー", err)
+		}
+		categoryId, err = add.LastInsertId()
+		c.Logger().Infof("categotyId is: %s", categoryId)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 	// VALUES (?, ?)  値は後で渡す。セキュリテイの関係でこのようにする方がいいらしい
-	cmd = "INSERT INTO items (name, category, image_name) VALUES (?, ?, ?)"
-	_, err = DbConnection.Exec(cmd, newItem.Name, newItem.Category, newItem.Image)
+	cmd = "INSERT INTO items (name, category_id, image_name) VALUES (?, ?, ?)"
+	_, err = DbConnection.Exec(cmd, newItem.Name, categoryId, newItem.Image)
 	if err != nil {
 		c.Logger().Infof("エラー", err)
 	}
@@ -120,32 +157,22 @@ func addItem(c echo.Context) error {
 
 func getItem(c echo.Context) error {
 
-	// データベースを開く。なければ生成
-	DbConnection, _ := sql.Open("sqlite3", "../db/mercari.sqlite3")
-	//閉じる
-	defer DbConnection.Close()
-
-	cmd := `CREATE TABLE IF NOT EXISTS items(
-        id int primary key autoincrement, 
-		name string, 
-		category string, 
-		image_name string)`
-
-	//実行 結果は返ってこない為、_にする
-	_, err := DbConnection.Exec(cmd)
-
-	//エラーハンドリング
+	// makeDB()
+	DbConnection, err := sql.Open("sqlite3", "../db/mercari.sqlite3")
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
-
+	defer DbConnection.Close()
 	//Read
-	cmd = "SELECT * FROM items"
+	cmd := "SELECT items.id, items.name, category.name, items.image_name FROM items JOIN category ON items.category_id = category.id"
 	rows, _ := DbConnection.Query(cmd)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, err)
+	}
 	defer rows.Close()
 
 	// 取得したデータをループでスライスに追加　for rows.Next()
-	var item []Item
+	item := []Item{}
 	for rows.Next() {
 		var element Item
 		//scan データ追加
@@ -165,6 +192,7 @@ func getItem(c echo.Context) error {
 	for _, element := range item {
 		fmt.Println(element.Name, element.Category)
 	}
+	// naosu item
 	return c.JSON(http.StatusOK, item)
 }
 
@@ -184,32 +212,22 @@ func getImg(c echo.Context) error {
 }
 
 func getItemByID(c echo.Context) error {
-	// データベースを開く。なければ生成
-	DbConnection, _ := sql.Open("sqlite3", "../db/mercari.sqlite3")
-	//閉じる
-	defer DbConnection.Close()
-
-	cmd := `CREATE TABLE IF NOT EXISTS items(
-        id int primary key autoincrement, 
-		name string, 
-		category string, 
-		image_name string)`
-
-	//実行 結果は返ってこない為、_にする
-	_, err := DbConnection.Exec(cmd)
-
-	//エラーハンドリング
+	// makeDB()
+	DbConnection, err := sql.Open("sqlite3", "../db/mercari.sqlite3")
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
-
+	defer DbConnection.Close()
 	//Read
-	cmd = "SELECT * FROM items"
+	cmd := "SELECT items.id, items.name, category.name, items.image_name FROM items JOIN category ON items.category_id = category.id"
 	rows, _ := DbConnection.Query(cmd)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, err)
+	}
 	defer rows.Close()
 
 	// 取得したデータをループでスライスに追加　for rows.Next()
-	var item []Item
+	item := []Item{}
 	for rows.Next() {
 		var element Item
 		//scan データ追加
@@ -218,6 +236,16 @@ func getItemByID(c echo.Context) error {
 			c.Logger().Infof("sqlの中身にエラー", err)
 		}
 		item = append(item, element)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		c.Logger().Infof("エラー", err)
+	}
+
+	//表示
+	for _, element := range item {
+		fmt.Println(element.Name, element.Category)
 	}
 
 	err = rows.Err()
@@ -226,8 +254,11 @@ func getItemByID(c echo.Context) error {
 	}
 
 	id := c.Param("item_id")
+	c.Logger().Infof("Receive item: %s", id)
+	c.Logger().Infof("&&&&&&&Receive item: %s", item)
 	for i, ele := range item {
-		if strconv.Itoa(i) == id {
+		var j = i+1
+		if strconv.Itoa(j) == id {
 			return c.JSON(http.StatusOK, ele)
 		}
 	}
@@ -236,27 +267,22 @@ func getItemByID(c echo.Context) error {
 }
 
 func searchItems(c echo.Context) error {
-	// データベースを開く。なければ生成
-	DbConnection, _ := sql.Open("sqlite3", "../db/mercari.sqlite3")
-	defer DbConnection.Close()
-	cmd := `CREATE TABLE IF NOT EXISTS items(
-        id int primary key autoincrement, 
-		name string, 
-		category string, 
-		image_name string)`
-	_, err := DbConnection.Exec(cmd)
-
+	// makeDB()
+	DbConnection, err := sql.Open("sqlite3", "../db/mercari.sqlite3")
 	if err != nil {
-		c.Logger().Infof("エラー", err)
+		return c.JSON(http.StatusInternalServerError, err)
 	}
-
+	defer DbConnection.Close()
 	//Read
-	cmd = "SELECT * FROM items"
+	cmd := "SELECT items.id, items.name, category.name, items.image_name FROM items JOIN category ON items.category_id = category.id"
 	rows, _ := DbConnection.Query(cmd)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, err)
+	}
 	defer rows.Close()
 
 	// 取得したデータをループでスライスに追加　for rows.Next()
-	var item []Item
+	item := []Item{}
 	for rows.Next() {
 		var element Item
 		//scan データ追加
@@ -270,6 +296,11 @@ func searchItems(c echo.Context) error {
 	err = rows.Err()
 	if err != nil {
 		c.Logger().Infof("エラー", err)
+	}
+
+	//表示
+	for _, element := range item {
+		fmt.Println(element.Name, element.Category)
 	}
 
 	var keyword string = c.QueryParam("keyword")
