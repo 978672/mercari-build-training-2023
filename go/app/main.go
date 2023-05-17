@@ -1,14 +1,14 @@
 package main
 
 import (
+	"crypto/sha256"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"os"
 	"path"
-	"strings"
-	"crypto/sha256"
 	"strconv"
-	"database/sql"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -31,29 +31,35 @@ type Items struct {
 }
 
 type Item struct {
-	Id string `json:"id"`
+	Id       string `json:"id"`
 	Name     string `json:"name"`
 	Category string `json:"category"`
-	Image string `json:"image"`
+	Image    string `json:"image"`
 }
 
 func root(c echo.Context) error {
 	res := Response{Message: "Hello, world!"}
+	// 現在いるディレクトリがどこか確認
+	if wd, err := os.Getwd(); err == nil {
+		c.Logger().Infof("current working directory is %s", wd)
+	} else {
+		c.Logger().Infof("error on Getwd %s", err)
+	}
 	return c.JSON(http.StatusOK, res)
 }
 
-/* 3.4 
-curl -X POST 
---url http://localhost:9000/items 
--F name=jacket 
--F category=fashion 
+/* 3.4
+curl -X POST
+--url http://localhost:9000/items
+-F name=jacket
+-F category=fashion
 -F image=@./local_image.jpg
 */
 
-//ハッシュ化
+// ハッシュ化
 func getSHA256Binary(s string) []byte {
-    r := sha256.Sum256([]byte(s))
-    return r[:]
+	r := sha256.Sum256([]byte(s))
+	return r[:]
 }
 
 func addItem(c echo.Context) error {
@@ -67,7 +73,7 @@ func addItem(c echo.Context) error {
 
 	//hashしたものに".jpg"をつける
 	hashedImg := getSHA256Binary(image.Filename)
-	image_filename := fmt.Sprintf("%x%s",hashedImg , ".jpg")
+	image_filename := fmt.Sprintf("%x%s", hashedImg, ".jpg")
 
 	c.Logger().Infof("Receive item: %s", name)
 	c.Logger().Infof("Receive item: %s", category)
@@ -78,9 +84,9 @@ func addItem(c echo.Context) error {
 	newItem.Name = name
 	newItem.Category = category
 	newItem.Image = image_filename
-	
+
 	// データベースを開く。なければ生成
-	DbConnection, _ := sql.Open("sqlite3", "../../db/mercari.sqlite3")
+	DbConnection, _ := sql.Open("sqlite3", "../db/mercari.sqlite3")
 	//閉じる
 	defer DbConnection.Close()
 
@@ -91,21 +97,20 @@ func addItem(c echo.Context) error {
 		image_name string)`
 
 	//実行 結果は返ってこない為、_にする
-    _, err = DbConnection.Exec(cmd)
+	_, err = DbConnection.Exec(cmd)
 
-    //エラーハンドリング
-    if err != nil {
-        c.Logger().Infof("エラー", err)
-    }
-	
+	//エラーハンドリング
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, err)
+	}
 
 	// 追加
 	// VALUES (?, ?)  値は後で渡す。セキュリテイの関係でこのようにする方がいいらしい
-    cmd = "INSERT INTO items (name, category, image_name) VALUES (?, ?, ?, ?)"
+	cmd = "INSERT INTO items (name, category, image_name) VALUES (?, ?, ?)"
 	_, err = DbConnection.Exec(cmd, newItem.Name, newItem.Category, newItem.Image)
-    if err != nil {
-        c.Logger().Infof("エラー", err)
-    }
+	if err != nil {
+		c.Logger().Infof("エラー", err)
+	}
 
 	message := fmt.Sprintf("item received: %s", name)
 	res := Response{Message: message}
@@ -116,7 +121,7 @@ func addItem(c echo.Context) error {
 func getItem(c echo.Context) error {
 
 	// データベースを開く。なければ生成
-	DbConnection, _ := sql.Open("sqlite3", "../../db/mercari.sqlite3")
+	DbConnection, _ := sql.Open("sqlite3", "../db/mercari.sqlite3")
 	//閉じる
 	defer DbConnection.Close()
 
@@ -127,40 +132,40 @@ func getItem(c echo.Context) error {
 		image_name string)`
 
 	//実行 結果は返ってこない為、_にする
-    _, err := DbConnection.Exec(cmd)
+	_, err := DbConnection.Exec(cmd)
 
-    //エラーハンドリング
-    if err != nil {
-        c.Logger().Infof("エラー", err)
-    }
-	
+	//エラーハンドリング
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
 	//Read
-	cmd = "SELECT * FROM person"
-    rows, _ := DbConnection.Query(cmd)
-    defer rows.Close()
-	
+	cmd = "SELECT * FROM items"
+	rows, _ := DbConnection.Query(cmd)
+	defer rows.Close()
+
 	// 取得したデータをループでスライスに追加　for rows.Next()
-    var item []Item
-    for rows.Next() {
-        var element Item
-        //scan データ追加
-        err := rows.Scan(&element.Id, &element.Name, &element.Category, &element.Image)
-        if err != nil {
-            c.Logger().Infof("sqlの中身にエラー", err)
-        }
-        item = append(item, element)
-    }
+	var item []Item
+	for rows.Next() {
+		var element Item
+		//scan データ追加
+		err := rows.Scan(&element.Id, &element.Name, &element.Category, &element.Image)
+		if err != nil {
+			c.Logger().Infof("sqlの中身にエラー", err)
+		}
+		item = append(item, element)
+	}
 
-    err = rows.Err()
-    if err != nil {
-        c.Logger().Infof("エラー", err)
-    }
+	err = rows.Err()
+	if err != nil {
+		c.Logger().Infof("エラー", err)
+	}
 
-    //表示
-    for _, element := range item {
-        fmt.Println(element.Name, element.Category)
-    }
-	return c.JSON(http.StatusOK, item) 
+	//表示
+	for _, element := range item {
+		fmt.Println(element.Name, element.Category)
+	}
+	return c.JSON(http.StatusOK, item)
 }
 
 func getImg(c echo.Context) error {
@@ -178,9 +183,9 @@ func getImg(c echo.Context) error {
 	return c.File(imgPath)
 }
 
-func getItemByID(c echo.Context)  error{
+func getItemByID(c echo.Context) error {
 	// データベースを開く。なければ生成
-	DbConnection, _ := sql.Open("sqlite3", "../../db/mercari.sqlite3")
+	DbConnection, _ := sql.Open("sqlite3", "../db/mercari.sqlite3")
 	//閉じる
 	defer DbConnection.Close()
 
@@ -191,38 +196,38 @@ func getItemByID(c echo.Context)  error{
 		image_name string)`
 
 	//実行 結果は返ってこない為、_にする
-    _, err := DbConnection.Exec(cmd)
+	_, err := DbConnection.Exec(cmd)
 
-    //エラーハンドリング
-    if err != nil {
-        c.Logger().Infof("エラー", err)
-    }
-	
+	//エラーハンドリング
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
 	//Read
-	cmd = "SELECT * FROM person"
-    rows, _ := DbConnection.Query(cmd)
-    defer rows.Close()
-	
+	cmd = "SELECT * FROM items"
+	rows, _ := DbConnection.Query(cmd)
+	defer rows.Close()
+
 	// 取得したデータをループでスライスに追加　for rows.Next()
-    var item []Item
-    for rows.Next() {
-        var element Item
-        //scan データ追加
-        err := rows.Scan(&element.Id, &element.Name, &element.Category, &element.Image)
-        if err != nil {
-            c.Logger().Infof("sqlの中身にエラー", err)
-        }
-        item = append(item, element)
-    }
+	var item []Item
+	for rows.Next() {
+		var element Item
+		//scan データ追加
+		err := rows.Scan(&element.Id, &element.Name, &element.Category, &element.Image)
+		if err != nil {
+			c.Logger().Infof("sqlの中身にエラー", err)
+		}
+		item = append(item, element)
+	}
 
-    err = rows.Err()
-    if err != nil {
-        c.Logger().Infof("エラー", err)
-    }
+	err = rows.Err()
+	if err != nil {
+		c.Logger().Infof("エラー", err)
+	}
 
-	id := c.Param("item_id") 
+	id := c.Param("item_id")
 	for i, ele := range item {
-		if(strconv.Itoa(i) == id){
+		if strconv.Itoa(i) == id {
 			return c.JSON(http.StatusOK, ele)
 		}
 	}
@@ -230,47 +235,47 @@ func getItemByID(c echo.Context)  error{
 	return c.JSON(http.StatusNotFound, res)
 }
 
-func searchItems(c echo.Context)  error{
+func searchItems(c echo.Context) error {
 	// データベースを開く。なければ生成
-	DbConnection, _ := sql.Open("sqlite3", "../../db/mercari.sqlite3")
+	DbConnection, _ := sql.Open("sqlite3", "../db/mercari.sqlite3")
 	defer DbConnection.Close()
 	cmd := `CREATE TABLE IF NOT EXISTS items(
         id int primary key autoincrement, 
 		name string, 
 		category string, 
 		image_name string)`
-    _, err := DbConnection.Exec(cmd)
+	_, err := DbConnection.Exec(cmd)
 
-    if err != nil {
-        c.Logger().Infof("エラー", err)
-    }
-	
+	if err != nil {
+		c.Logger().Infof("エラー", err)
+	}
+
 	//Read
-	cmd = "SELECT * FROM person"
-    rows, _ := DbConnection.Query(cmd)
-    defer rows.Close()
-	
+	cmd = "SELECT * FROM items"
+	rows, _ := DbConnection.Query(cmd)
+	defer rows.Close()
+
 	// 取得したデータをループでスライスに追加　for rows.Next()
-    var item []Item
-    for rows.Next() {
-        var element Item
-        //scan データ追加
-        err := rows.Scan(&element.Id, &element.Name, &element.Category, &element.Image)
-        if err != nil {
-            c.Logger().Infof("sqlの中身にエラー", err)
-        }
-        item = append(item, element)
-    }
+	var item []Item
+	for rows.Next() {
+		var element Item
+		//scan データ追加
+		err := rows.Scan(&element.Id, &element.Name, &element.Category, &element.Image)
+		if err != nil {
+			c.Logger().Infof("sqlの中身にエラー", err)
+		}
+		item = append(item, element)
+	}
 
-    err = rows.Err()
-    if err != nil {
-        c.Logger().Infof("エラー", err)
-    }
+	err = rows.Err()
+	if err != nil {
+		c.Logger().Infof("エラー", err)
+	}
 
-	var keyword string = c.FormValue("keyword")
+	var keyword string = c.QueryParam("keyword")
 	var searchedItem []Item
 	for _, ele := range item {
-		if(keyword == ele.Category){
+		if keyword == ele.Category {
 			searchedItem = append(searchedItem, ele)
 		}
 	}
@@ -280,7 +285,6 @@ func searchItems(c echo.Context)  error{
 	res := Response{Message: "Not found"}
 	return c.JSON(http.StatusNotFound, res)
 }
-
 
 func main() {
 	e := echo.New()
@@ -305,7 +309,7 @@ func main() {
 	e.GET("/items", getItem)
 	e.GET("/image/:imageFilename", getImg)
 	e.GET("/items/:item_id", getItemByID)
-	e.GET("/items/search", searchItems)
+	e.GET("/search", searchItems)
 	// Start server
 	e.Logger.Fatal(e.Start(":9000"))
 }
