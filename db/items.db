@@ -1,1 +1,2 @@
-CREATE TABLE items(id int primary key autoincrement, name text, category text, image_name text);
+CREATE TABLE items (id integer primary key autoincrement, name string, category_id interger,image_filename string);
+CREATE TABLE category (id integer primary key autoincrement,name string);
