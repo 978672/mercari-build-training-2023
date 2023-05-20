@@ -28,7 +28,7 @@ WORKDIR /app/go/go
 RUN go mod download
 
 # Copy the source code into the container
-COPY go/app ./
+COPY app ./
 
 # Build the Go application
 RUN go build -o main
