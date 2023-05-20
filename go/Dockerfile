@@ -6,12 +6,12 @@ RUN apk update && apk add --no-cache gcc musl-dev sqlite sqlite-dev
 
 # CMD ["go", "version"]
 
-WORKDIR /app/go
+WORKDIR /app
 COPY db db
 COPY go go
 
 USER root
-RUN chown -R trainee:mercari /app/go
+RUN chown -R trainee:mercari /app
 
 USER trainee
 
@@ -22,7 +22,7 @@ ENV GOARCH=amd64
 ENV CGO_ENABLED=1
 
 #ディレクトリ変える
-WORKDIR /app/go/go
+WORKDIR /app/go
 
 # Download and cache Go dependencies
 RUN go mod download
