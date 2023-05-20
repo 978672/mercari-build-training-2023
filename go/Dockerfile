@@ -21,6 +21,7 @@ ENV GOARCH=amd64
 # Enable CGO
 ENV CGO_ENABLED=1
 
+#ディレクトリ変える
 WORKDIR /app/go/go
 
 # Download and cache Go dependencies
