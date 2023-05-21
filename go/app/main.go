@@ -44,6 +44,36 @@ curl -X POST --url http://localhost:9000/items -F name=jacket -F category=fashio
 imagesでcurlする
 */
 
+func readFile(c echo.Context)(Items, error){
+	jsonFile, err := os.Open("items.json")
+	if err != nil {
+		c.Logger().Infof("ReadError: ", err)
+		os.Exit(1)
+	}
+	defer jsonFile.Close()
+	jsonData, err := ioutil.ReadAll(jsonFile)
+	
+	if err != nil {
+		if os.IsNotExist(err) {
+			// ファイルが存在しない場合は、items.jsonを作成する
+			jsonData = []byte("{}")
+			err = ioutil.WriteFile("items.json", jsonData, 0644)
+			if err != nil {
+				c.Logger().Infof("JSONファイルを作成できません", err)
+				os.Exit(1)
+			}
+		} else {
+			c.Logger().Infof("JSONファイルを開けません", err)
+			os.Exit(1)
+		}
+	}
+
+	items := Items{[]Item{}}
+	err = json.Unmarshal(jsonData, &items)
+	return items, err
+}
+
+
 //ハッシュ化
 func getSHA256Binary(s string) []byte {
 	r := sha256.Sum256([]byte(s))
@@ -62,7 +92,6 @@ func addItem(c echo.Context) error {
 	//hashしたものに".jpg"をつける
 	hashedImg := getSHA256Binary(image.Filename)
 	image_filename := fmt.Sprintf("%x%s", hashedImg, ".jpg")
-
 	c.Logger().Infof("Receive item: %s", name)
 	c.Logger().Infof("Receive item: %s", category)
 	c.Logger().Infof("Receive item: %s", image.Filename)
@@ -74,21 +103,7 @@ func addItem(c echo.Context) error {
 	newItem.Image = image_filename
 
 	// fileを開いて読んでitemsをゲットする
-	jsonFile, err := os.Open("items.json")
-	if err != nil {
-		c.Logger().Infof("JSONファイルを開けません", err)
-		return c.JSON(http.StatusInternalServerError, err)
-	}
-	defer jsonFile.Close()
-	jsonData, err := ioutil.ReadAll(jsonFile)
-	if err != nil {
-		c.Logger().Infof("JSONファイルを開けません", err)
-		return c.JSON(http.StatusInternalServerError, err)
-	}
-
-	var items Items
-
-	json.Unmarshal(jsonData, &items)
+	items, err := readFile(c)
 
 	// fileに追加
 	items.Items = append(items.Items, newItem)
@@ -102,21 +117,7 @@ func addItem(c echo.Context) error {
 }
 
 func getItem(c echo.Context) error {
-	jsonFile, err := os.Open("items.json")
-	if err != nil {
-		c.Logger().Infof("JSONファイルを開けません", err)
-		return c.JSON(http.StatusInternalServerError, err)
-	}
-	defer jsonFile.Close()
-	jsonData, err := ioutil.ReadAll(jsonFile)
-	if err != nil {
-		c.Logger().Infof("JSONファイルを開けません", err)
-		return c.JSON(http.StatusInternalServerError, err)
-	}
-
-	var items Items
-	json.Unmarshal(jsonData, &items)
-
+	items, _ := readFile(c)
 	return c.JSON(http.StatusOK, items)
 }
 
@@ -136,21 +137,7 @@ func getImg(c echo.Context) error {
 }
 
 func getItemByID(c echo.Context) error {
-	jsonFile, err := os.Open("items.json")
-	if err != nil {
-		c.Logger().Infof("JSONファイルを開けません", err)
-		return c.JSON(http.StatusInternalServerError, err)
-	}
-	defer jsonFile.Close()
-	jsonData, err := ioutil.ReadAll(jsonFile)
-	if err != nil {
-		c.Logger().Infof("JSONファイルを開けません", err)
-		return c.JSON(http.StatusInternalServerError, err)
-	}
-
-	var items Items
-	json.Unmarshal(jsonData, &items)
-
+	items, _ := readFile(c)
 	id := c.Param("item_id")
 
 	for index, element := range items.Items {
