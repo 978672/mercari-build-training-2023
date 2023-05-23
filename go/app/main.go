@@ -39,12 +39,7 @@ type Item struct {
 
 func root(c echo.Context) error {
 	res := Response{Message: "Hello, world!"}
-	// 現在いるディレクトリがどこか確認
-	if wd, err := os.Getwd(); err == nil {
-		c.Logger().Infof("current working directory is %s", wd)
-	} else {
-		c.Logger().Infof("error on Getwd %s", err)
-	}
+	
 	return c.JSON(http.StatusOK, res)
 }
 
@@ -155,6 +150,30 @@ func addItem(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
+func ReadDB() ([]Item, error) {
+	//Read
+	cmd := "SELECT items.id, items.name, category.name, items.image_name FROM items JOIN category ON items.category_id = category.id"
+	rows, err := DbConnection.Query(cmd)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	item := []Item{}
+	for rows.Next() {
+		var element Item
+	  	err := rows.Scan(&element.Id, &element.Name, &element.Category, &element.Image)
+	  	if err != nil {
+		return nil, err
+		}
+	  	item = append(item, element)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return item, nil
+}
+
 func getItem(c echo.Context) error {
 
 	// makeDB()
@@ -162,13 +181,16 @@ func getItem(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
+	// item, _ := ReadDB()
 	defer DbConnection.Close()
+
 	//Read
 	cmd := "SELECT items.id, items.name, category.name, items.image_name FROM items JOIN category ON items.category_id = category.id"
 	rows, _ := DbConnection.Query(cmd)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
+	// item, _ := ReadDB()
 	defer rows.Close()
 
 	// 取得したデータをループでスライスに追加　for rows.Next()
@@ -187,11 +209,8 @@ func getItem(c echo.Context) error {
 	if err != nil {
 		c.Logger().Infof("エラー", err)
 	}
+	// item, _ := ReadDB()
 
-	//表示
-	for _, element := range item {
-		fmt.Println(element.Name, element.Category)
-	}
 	// naosu item
 	return c.JSON(http.StatusOK, item)
 }
