@@ -47,27 +47,13 @@ imagesでcurlする
 func readFile(c echo.Context)(Items, error){
 	jsonFile, err := os.Open("items.json")
 	if err != nil {
-		c.Logger().Infof("ReadError: ", err)
-		os.Exit(1)
+		c.Logger().Infof("JSONファイルがありません", err)
+		items := Items{[]Item{}}
+		return items, err
 	}
 	defer jsonFile.Close()
 	jsonData, err := ioutil.ReadAll(jsonFile)
 	
-	if err != nil {
-		if os.IsNotExist(err) {
-			// ファイルが存在しない場合は、items.jsonを作成する
-			jsonData = []byte("{}")
-			err = ioutil.WriteFile("items.json", jsonData, 0644)
-			if err != nil {
-				c.Logger().Infof("JSONファイルを作成できません", err)
-				os.Exit(1)
-			}
-		} else {
-			c.Logger().Infof("JSONファイルを開けません", err)
-			os.Exit(1)
-		}
-	}
-
 	items := Items{[]Item{}}
 	err = json.Unmarshal(jsonData, &items)
 	return items, err
