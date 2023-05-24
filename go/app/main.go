@@ -193,7 +193,8 @@ func getItem(c echo.Context) error {
 		fmt.Println(element.Name, element.Category)
 	}
 	// naosu item
-	return c.JSON(http.StatusOK, item)
+	items := Items{Items: item}
+	return c.JSON(http.StatusOK, items)
 }
 
 func getImg(c echo.Context) error {
@@ -255,7 +256,7 @@ func getItemByID(c echo.Context) error {
 
 	id := c.Param("item_id")
 	c.Logger().Infof("Receive item: %s", id)
-	c.Logger().Infof("&&&&&&&Receive item: %s", item)
+	c.Logger().Infof("Receive item: %s", item)
 	for i, ele := range item {
 		var j = i+1
 		if strconv.Itoa(j) == id {
