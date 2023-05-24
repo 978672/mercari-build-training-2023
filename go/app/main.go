@@ -210,9 +210,9 @@ func getItem(c echo.Context) error {
 		c.Logger().Infof("エラー", err)
 	}
 	// item, _ := ReadDB()
-
+	items := Items{Items: item}
 	// naosu item
-	return c.JSON(http.StatusOK, item)
+	return c.JSON(http.StatusOK, items)
 }
 
 func getImg(c echo.Context) error {
